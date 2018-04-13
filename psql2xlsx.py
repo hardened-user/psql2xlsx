@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 10.04.2018
+# 13.04.2018
 #--------------------------------------------------------------------------------------------------
 # python3-xlsxwriter
 # python3-psycopg2
 #--------------------------------------------------------------------------------------------------
+
 import os
 import re
 import sys
@@ -16,6 +17,10 @@ import argparse
 import configparser
 import psycopg2
 import xlsxwriter
+
+_DT_FORMAT   = 'MM/DD/YYYY HH:MM:SS'
+_TIME_FORMAT = 'HH:MM:SS'
+_DATE_FORMAT = 'MM/DD/YYYY'
 
 
 def main():
@@ -90,9 +95,9 @@ def main():
     workbook_format_global.set_font_name(config_default['font_name'])
     workbook_format_global.set_font_size(config_default['font_size'])
     cell_format_header = workbook.add_format({'bold': True,  'font_name': config_default['font_name'], 'font_size': config_default['font_size']})
-    cell_format_time   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': 'HH:MM:SS'})
-    cell_format_date   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': 'MM/DD/YYYY'})
-    cell_format_dt     = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': 'MM/DD/YYYY HH:MM:SS'})
+    cell_format_dt     = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _DT_FORMAT})
+    cell_format_time   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _TIME_FORMAT})
+    cell_format_date   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _DATE_FORMAT})
     #==============================================================================================
     #==============================================================================================
     # Start of the work cycle
@@ -155,15 +160,19 @@ def main():
                 if isinstance(value, datetime.datetime):
                     # WARNING: datetime.datetime перед datetime.date
                     worksheet.write(row_num, coll_num, value, cell_format_dt)
+                    length = len(_DT_FORMAT)
                 elif isinstance(value, datetime.time):
                     worksheet.write(row_num, coll_num, value, cell_format_time)
+                    length = len(_TIME_FORMAT)
                 elif isinstance(value, datetime.date):
                     worksheet.write(row_num, coll_num, value, cell_format_date)
+                    length = len(_DATE_FORMAT)
                 else:
                     worksheet.write(row_num, coll_num, value)
-                # NOTE: Считаем макс длинну текста
-                if len(str(value)) > column_names[coll_num]['length']:
-                    column_names[coll_num]['length'] = len(str(value))
+                    length = len(str(value))
+                # NOTE: Считаем макс длинну столбца
+                if length > column_names[coll_num]['length']:
+                    column_names[coll_num]['length'] = length
         #__________________________________________________
         # sets the column width
         #print(column_names) #### TEST
