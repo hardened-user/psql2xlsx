@@ -18,9 +18,9 @@ import configparser
 import psycopg2
 import xlsxwriter
 
-_DT_FORMAT   = 'MM/DD/YYYY HH:MM:SS'
+_DT_FORMAT   = 'MM.DD.YYYY HH:MM:SS'
 _TIME_FORMAT = 'HH:MM:SS'
-_DATE_FORMAT = 'MM/DD/YYYY'
+_DATE_FORMAT = 'MM.DD.YYYY'
 
 
 def main():
