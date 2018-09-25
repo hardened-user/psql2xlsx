@@ -15,7 +15,7 @@ Example
     ./psql2xlsx.py
 
 
-Visit also [WiKi](http://wiki.enchtex.info/handmade/psql2xlsx).
+Visit also [WiKi](http://wiki.enchtex.info/handmade/postgres/psql2xlsx).
 
 
 
