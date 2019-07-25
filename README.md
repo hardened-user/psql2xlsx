@@ -18,7 +18,7 @@ Help
 user@localhost:~$ ./psql2xlsx.py -h
 ```
 
-Visit also [WiKi](http://wiki.enchtex.info/handmade/psql2xlsx).
+Visit also [WiKi](http://wiki.enchtex.info/handmade/postgres/psql2xlsx).
 
 
 
