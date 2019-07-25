@@ -6,14 +6,17 @@ Utility for saving Postgres SQL querys results to .xlsx file
 
 Required
 =======
-* python3.x
-* python3-xlsxwriter
-* python3-psycopg2
+* Python 3.x
+  * psycopg2
+  * xlsxwriter
+
 
 Example
 =======
-    ./psql2xlsx.py
-
+Help
+```console
+user@localhost:~$ ./psql2xlsx.py -h
+```
 
 Visit also [WiKi](http://wiki.enchtex.info/handmade/psql2xlsx).
 

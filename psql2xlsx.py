@@ -1,164 +1,176 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 13.04.2018
-#--------------------------------------------------------------------------------------------------
-# python3-xlsxwriter
-# python3-psycopg2
-#--------------------------------------------------------------------------------------------------
-
+# 25.07.2019
+# ----------------------------------------------------------------------------------------------------------------------
+import argparse
+import configparser
+import datetime
 import os
 import re
 import sys
-import time
-import datetime
-from time import sleep
-#
-import argparse
-import configparser
+import traceback
+
 import psycopg2
 import xlsxwriter
 
-_DT_FORMAT   = 'MM.DD.YYYY HH:MM:SS'
+_DT_FORMAT = 'MM.DD.YYYY HH:MM:SS'
 _TIME_FORMAT = 'HH:MM:SS'
 _DATE_FORMAT = 'MM.DD.YYYY'
 
 
 def main():
-    #______________________________________________________
-    # Входящие аргументы
+    # __________________________________________________________________________
+    # command-line options, arguments
     try:
-        parser = argparse.ArgumentParser(description='psql2xls - utility for saving Postgres SQL querys results to .xlsx file')
-        parser.add_argument('-f', action='store', type=str, nargs='?', default='',
-                            metavar='file', help="output file name")
+        parser = argparse.ArgumentParser(
+            description="psql2xls - utility for saving Postgres SQL queries results to .xlsx file")
+        parser.add_argument('-f', '--file', action='store', default=None,
+                            metavar="<FILE>", help="output file name")
+        parser.add_argument('-o', '--overwrite', action='store_true', default=False,
+                            help="allow overwrite")
         args = parser.parse_args()
     except SystemExit:
         return False
-    #______________________________________________________
-    # Подключение config файла
-    config_name = 'config.ini'
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), config_name)
-    config_ini = configparser.ConfigParser()
-    config_ini.read(config_path)
+    # __________________________________________________________________________
+    # read configuration file
+    try:
+        self_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
+        config_ini = configparser.ConfigParser()
+        config_ini.read(os.path.join(self_dir, "config.ini"))
+    except Exception as err:
+        print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
+        return False
+    # __________________________________________________________________________
     if not config_ini.sections() or 'default' not in config_ini.sections():
-        print("[EE] Configuration failed: 'default'", file=sys.stderr)
+        print("[EE] Missing configuration section :: default", flush=True)
         return False
     if not [x for x in config_ini.sections() if x != 'default']:
-        print("[..] Nothing to do")
+        print("[..] Nothing to do", flush=True)
         return False
-    #______________________________________________________
+    # __________________________________________________________________________
+    # generate default config
     config_default = {
-        'host'    : "localhost",
-        'port'    : 5432,
-        'user'    : "postgres",
-        'password': None,
-        'dbname'  : "postgres",
-        'file'    : None,
+        'file': None,
+        'overwrite': False,
         'font_name': 'Liberation Sans',
         'font_size': 10,
+        'host': "localhost",
+        'port': 5432,
+        'base': "postgres",
+        'user': "postgres",
+        'pass': None,
+        'query': None
     }
     for x in config_default:
-        ### apply default config
         try:
             config_default[x] = config_ini['default'][x]
         except KeyError:
             pass
         except Exception as err:
-            print("[EE] Exception Err: {}".format(err), file=sys.stderr)
-            print("[EE] Exception Inf: {}".format(sys.exc_info()), file=sys.stderr)
+            print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
             return False
-    #______________________________________________________
-    # Проверка пути файла
-    if args.f:
-        config_default['file'] = args.f
+    # inspect: file
+    if args.file:
+        config_default['file'] = args.file
     if not config_default['file']:
-        print("[EE] Configuration failed: 'file'", file=sys.stderr)
+        print("[EE] Invalid option value :: file", flush=True)
         return False
-    #______________________________________________________
-    # Проверка директорий
-    if not check_access_dir('rw', os.path.dirname(config_default['file'])):
-        return False
-    #______________________________________________________
-    # font_name
+    # inspect: overwrite
+    if args.overwrite:
+        config_default['overwrite'] = args.overwrite
+    if isinstance(config_default['overwrite'], str):
+        if config_default['overwrite'].lower() in ('true', 'yes', 'on'):
+            config_default['overwrite'] = True
+        else:
+            config_default['overwrite'] = False
+    # inspect: font_name
     if not config_default['font_name']:
-        print("[EE] Configuration failed: 'font_name'", file=sys.stderr)
+        print("[EE] Invalid option value :: font_name", flush=True)
         return False
-    #______________________________________________________
-    # font_size
+    # inspect: font_size
     if not config_default['font_size']:
-        print("[EE] Configuration failed: 'font_size'", file=sys.stderr)
+        print("[EE] Invalid option value :: font_size", flush=True)
         return False
-    #______________________________________________________
-    # workbook
+    # __________________________________________________________________________
+    # check permission
+    if not fs_check_access_file(config_default['file'], config_default['overwrite']):
+        return False
+    # __________________________________________________________________________
+    # make workbook
     workbook = xlsxwriter.Workbook(config_default['file'])
-    # Форматы ячеек
     workbook_format_global = workbook.formats[0]
     workbook_format_global.set_font_name(config_default['font_name'])
     workbook_format_global.set_font_size(config_default['font_size'])
-    cell_format_header = workbook.add_format({'bold': True,  'font_name': config_default['font_name'], 'font_size': config_default['font_size']})
-    cell_format_dt     = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _DT_FORMAT})
-    cell_format_time   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _TIME_FORMAT})
-    cell_format_date   = workbook.add_format({'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'], 'num_format': _DATE_FORMAT})
-    #==============================================================================================
-    #==============================================================================================
+    # special cell formats
+    cell_format_header = workbook.add_format(
+        {'bold': True, 'font_name': config_default['font_name'], 'font_size': config_default['font_size']})
+    cell_format_dt = workbook.add_format(
+        {'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'],
+         'num_format': _DT_FORMAT})
+    cell_format_time = workbook.add_format(
+        {'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'],
+         'num_format': _TIME_FORMAT})
+    cell_format_date = workbook.add_format(
+        {'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'],
+         'num_format': _DATE_FORMAT})
+    # ==================================================================================================================
+    # ==================================================================================================================
     # Start of the work cycle
-    #==============================================================================================
+    # ==================================================================================================================
     for page in [x for x in config_ini.sections() if x != 'default']:
-        print("[..] Page '{}'...".format(page))
+        print("[..] Generated page :: {} ...".format(page))
+        re_simple_str = re.compile(r"^([\w\- ]+)$")
+        if not re_simple_str.search(page):
+            print("[EE] Page name is not simple string", flush=True)
+            return False
+        # __________________________________________________________________________
+        # generate page config
         config_page = config_default.copy()
-        ### apply page config
-        for x in [x for x in config_ini[page] if x not in config_default.keys()]:
+        for x in config_page:
             try:
                 config_page[x] = config_ini[page][x]
             except KeyError:
                 pass
             except Exception as err:
-                print("[EE] Exception Err: {}".format(err), file=sys.stderr)
-                print("[EE] Exception Inf: {}".format(sys.exc_info()), file=sys.stderr)
+                print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
                 return False
-        #print(config_page) #### TEST
-        #__________________________________________________
-        # page
-        re_simple_str = re.compile("^([\w\- ]+)$")
-        if not re_simple_str.search(page):
-            print("[EE] Page name is not simple string", file=sys.stderr)
-            return False
-        #__________________________________________________
-        # query
+        # print(config_page)  # TEST
+        # ______________________________________________________________________
+        # inspect: query
         if 'query' not in config_page or not config_page['query']:
-            print("[EE] Configuration failed: 'query'", file=sys.stderr)
+            print("[EE] Invalid option value :: query", flush=True)
             return False
-        #__________________________________________________
-        # POSTGRES_DSN
-        POSTGRES_DSN = """host='{}' port={} dbname='{}' user='{}'""".format(config_page['host'],
-                                                                            config_page['port'],
-                                                                            config_page['dbname'],
-                                                                            config_page['user'],)
-        POSTGRES_DSN += """ password='{}'""".format(config_page['password'] if config_page['password'] else '')
-        #print(POSTGRES_DSN) #### TEST
-        #__________________________________________________
-        # Подключение к БД
-        db = psycopg2.connect(POSTGRES_DSN)
-        db.set_client_encoding('UTF8')
-        cursor = db.cursor()
-        ### Выполнить запрос
-        cursor.execute(config_page['query'])
-        #__________________________________________________
-        # Добавление страниц в документ
+        # ______________________________________________________________________
+        # execute sql query
+        postgres_dsn = "{}{}{}{}{}".format(
+            "host='{}' ".format(config_page['host']) if config_page['host'] else '',
+            "port='{}' ".format(config_page['port']) if config_page['port'] else '',
+            "user='{}' ".format(config_page['user']) if config_page['user'] else '',
+            "dbname='{}' ".format(config_page['base']) if config_page['base'] else '',
+            "password='{}'".format(config_page['pass']) if config_page['pass'] else '',
+        ).strip()
+        # print(postgres_dsn)  # TEST
+        db = pg_connect(postgres_dsn)
+        if not db:
+            return False
+        cursor = pg_query(db, config_page['query'])
+        if not cursor:
+            return False
+        # ______________________________________________________________________
+        # make worksheet
         worksheet = workbook.add_worksheet(page)
         column_names = [{'name': desc[0], 'length': len(desc[0])} for desc in cursor.description]
-        #print(column_names) #### TEST
-        ### Запись шапки
+        # print(column_names)  # TEST
         for i, x in enumerate(column_names):
             worksheet.write(0, i, x['name'], cell_format_header)
-        ### Запись данных
         for i, row in enumerate(cursor.fetchall()):
             row_num = i + 1
             for coll_num, value in enumerate(row):
-                #print(row_num, coll_num, value) #### TEST
-                #print(type(value), value) #### TEST
-                # NOTE: Специальные форматы ячеек
+                # print(row_num, coll_num, value) #### TEST
+                # print(type(value), value) #### TEST
+                # special cell formats
                 if isinstance(value, datetime.datetime):
-                    # WARNING: datetime.datetime перед datetime.date
+                    # WARNING: check <'datetime.datetime'> before <'datetime.date'>
                     worksheet.write(row_num, coll_num, value, cell_format_dt)
                     length = len(_DT_FORMAT)
                 elif isinstance(value, datetime.time):
@@ -170,58 +182,100 @@ def main():
                 else:
                     worksheet.write(row_num, coll_num, value)
                     length = len(str(value))
-                # NOTE: Считаем макс длинну столбца
+                # NOTE: calculate the maximum length of a row in a column
                 if length > column_names[coll_num]['length']:
                     column_names[coll_num]['length'] = length
-        #__________________________________________________
-        # sets the column width
-        #print(column_names) #### TEST
+        # ______________________________________________________________________
+        # set the width of the column
         for i, x in enumerate(column_names):
+            # NOTE: limit the maximum width
             if x['length'] < 100:
                 length = x['length'] + 1
             else:
                 length = 100
-            #print(i, length, x['name']) ####TEST
             worksheet.set_column(i, i, length)
-    #______________________________________________________
-    # Запись файла
+    # __________________________________________________________________________
+    # write file
     workbook.close()
-    print("[OK] Workbook saved: '{}'".format(config_default['file']))
-    #______________________________________________________
+    print("[OK] Workbook saved :: {}".format(config_default['file']), flush=True)
+    # __________________________________________________________________________
     return True
 
 
-#==================================================================================================
+# ======================================================================================================================
 # Functions
-#==================================================================================================
-def check_access_dir(mode, *args):
-    return_value = True
-    modes_dict = {'ro': os.R_OK, 'rx': os.X_OK, 'rw': os.W_OK}
-    for x in args:
-        if not x:
-            print("[EE] Directory is not specified", file=sys.stderr)
-            return_value = False
-            continue
-        if os.path.exists(x):
-            if os.path.isdir(x):
-                if not os.access(x, modes_dict[mode]):
-                    print("[EE] Access denied: '{}' ({})".format(x, mode), file=sys.stderr)
-                    return_value = False
-            else:
-                print("[EE] Is not directory: '{}'".format(x), file=sys.stderr)
-                return_value = False
-        else:
-            print("[EE] Does not exist: '{}'".format(x), file=sys.stderr)
-            return_value = False
-    #______________________________________________________
-    return return_value
+# ======================================================================================================================
+def fs_check_access_file(path, ignore_existing=False):
+    """
+    File permission check.
+    """
+    path = os.path.abspath(path)
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            print("[EE] Is a directory :: {}".format(path), flush=True)
+            return False
+        if not ignore_existing:
+            print("[EE] File already exists :: {}".format(path), flush=True)
+            return False
+        if not os.access(path, os.W_OK):
+            print("[EE] File access denied :: {}".format(path), flush=True)
+            return False
+    else:
+        if not os.access(os.path.dirname(path), os.W_OK):
+            print("[EE] Directory access denied :: {}".format(path), flush=True)
+            return False
+    # __________________________________________________________________________
+    return True
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+def pg_connect(dsn):
+    """
+    Create a new database session and return a new connection object.
+    """
+    try:
+        conn = psycopg2.connect(dsn)
+        conn.set_client_encoding('UTF8')
+        print("[OK] PostgreSQL successfully connected")
+    except (psycopg2.OperationalError, psycopg2.ProgrammingError) as err:
+        print("[EE] PostgreSQL Exception :: {}".format(err, flush=True))
+        return None
+    except Exception as err:
+        print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
+        return None
+    # __________________________________________________________________________
+    return conn  # <class 'psycopg2.extensions.connection'>
+
+
+def pg_query(conn, query):
+    """
+    Execute a database operation (query or command).
+    """
+    cursor = conn.cursor()
+    try:
+        cursor.execute(query)
+    except (psycopg2.DataError, psycopg2.ProgrammingError) as err:
+        print("[EE] PostgreSQL Exception :: {}".format(err), flush=True)
+        conn.rollback()
+        cursor.close()
+        return None
+    except Exception as err:
+        print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
+        return None
+    else:
+        conn.commit()
+    # __________________________________________________________________________
+    return cursor  # <class 'psycopg2.extensions.cursor'>
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if __name__ == '__main__':
-    rc = not main() # Compatible return code
+    rc = main()
+    # __________________________________________________________________________
     if os.name == 'nt':
+        # noinspection PyUnresolvedReferences
         import msvcrt
-        print("[..] Press any key to exit")
+
+        print("[..] Press any key to exit", flush=True)
         msvcrt.getch()
-    sys.exit(rc)
+    # __________________________________________________________________________
+    sys.exit(not rc)  # Compatible return code
