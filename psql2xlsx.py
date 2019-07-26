@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 25.07.2019
+# 26    .07.2019
 # ----------------------------------------------------------------------------------------------------------------------
 import argparse
 import configparser
@@ -24,19 +24,20 @@ def main():
     try:
         parser = argparse.ArgumentParser(
             description="psql2xls - utility for saving Postgres SQL queries results to .xlsx file")
-        parser.add_argument('-f', '--file', action='store', default=None,
-                            metavar="<FILE>", help="output file name")
-        parser.add_argument('-o', '--overwrite', action='store_true', default=False,
-                            help="allow overwrite")
+        parser.add_argument('-c', '--config', action='store', default="config.ini",
+                            metavar="<CONFIG_FILE>", help="configuration file path")
+        parser.add_argument('-o', '--output', action='store', default=None,
+                            metavar="<OUTPUT_FILE>", help="output file path")
+        parser.add_argument('-f', '--overwrite', action='store_true', default=False,
+                            help="allow overwrite output file")
         args = parser.parse_args()
     except SystemExit:
         return False
     # __________________________________________________________________________
     # read configuration file
     try:
-        self_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
         config_ini = configparser.ConfigParser()
-        config_ini.read(os.path.join(self_dir, "config.ini"))
+        config_ini.read(os.path.abspath(args.config))
     except Exception as err:
         print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
         return False
@@ -50,7 +51,7 @@ def main():
     # __________________________________________________________________________
     # generate default config
     config_default = {
-        'file': None,
+        'output': None,
         'overwrite': False,
         'font_name': 'Liberation Sans',
         'font_size': 10,
@@ -69,11 +70,11 @@ def main():
         except Exception as err:
             print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
             return False
-    # inspect: file
-    if args.file:
-        config_default['file'] = args.file
-    if not config_default['file']:
-        print("[EE] Invalid option value :: file", flush=True)
+    # inspect: output
+    if args.output:
+        config_default['output'] = args.output
+    if not config_default['output']:
+        print("[EE] Invalid option value :: output", flush=True)
         return False
     # inspect: overwrite
     if args.overwrite:
@@ -93,11 +94,11 @@ def main():
         return False
     # __________________________________________________________________________
     # check permission
-    if not fs_check_access_file(config_default['file'], config_default['overwrite']):
+    if not fs_check_access_file(config_default['output'], config_default['overwrite']):
         return False
     # __________________________________________________________________________
     # make workbook
-    workbook = xlsxwriter.Workbook(config_default['file'])
+    workbook = xlsxwriter.Workbook(config_default['output'])
     workbook_format_global = workbook.formats[0]
     workbook_format_global.set_font_name(config_default['font_name'])
     workbook_format_global.set_font_size(config_default['font_size'])
@@ -197,7 +198,7 @@ def main():
     # __________________________________________________________________________
     # write file
     workbook.close()
-    print("[OK] Workbook saved :: {}".format(config_default['file']), flush=True)
+    print("[OK] Workbook saved :: {}".format(config_default['output']), flush=True)
     # __________________________________________________________________________
     return True
 

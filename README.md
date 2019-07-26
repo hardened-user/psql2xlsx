@@ -1,7 +1,7 @@
 Postgres SQL to .xlsx
 ======================
 
-Utility for saving Postgres SQL querys results to .xlsx file 
+    Utility for saving Postgres SQL queries results to .xlsx file 
 
 
 Required
@@ -23,7 +23,7 @@ user@localhost:~$ nano config.ini
 ```
 Run
 ```console
-user@localhost:~$ ./psql2xlsx.py -f /tmp/1.xlsx
+user@localhost:~$ ./psql2xlsx.py -o /tmp/1.xlsx
 [..] Generated page :: page1 ...
 [OK] PostgreSQL successfully connected
 [..] Generated page :: page2 ...
