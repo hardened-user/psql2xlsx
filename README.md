@@ -17,10 +17,21 @@ Help
 ```console
 user@localhost:~$ ./psql2xlsx.py -h
 ```
+Config
+```console
+user@localhost:~$ nano config.ini
+```
+Run
+```console
+user@localhost:~$ ./psql2xlsx.py -f /tmp/1.xlsx
+[..] Generated page :: page1 ...
+[OK] PostgreSQL successfully connected
+[..] Generated page :: page2 ...
+[OK] PostgreSQL successfully connected
+[..] Generated page :: page3 ...
+[OK] PostgreSQL successfully connected
+[OK] Workbook saved :: /tmp/1.xlsx
 
-Visit also [WiKi](http://wiki.enchtex.info/handmade/postgres/psql2xlsx).
+```
 
-
-
-
-
+See also [WiKi](http://wiki.enchtex.info/handmade/postgres/psql2xlsx) page.
