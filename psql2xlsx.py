@@ -142,7 +142,7 @@ def main():
             print("[EE] Invalid option value :: query", flush=True)
             return False
         # ______________________________________________________________________
-        # execute sql query
+        # database connection
         postgres_dsn = "{}{}{}{}{}".format(
             "host='{}' ".format(config_page['host']) if config_page['host'] else '',
             "port='{}' ".format(config_page['port']) if config_page['port'] else '',
@@ -154,41 +154,50 @@ def main():
         db = pg_connect(postgres_dsn)
         if not db:
             return False
-        cursor = pg_query(db, config_page['query'])
-        if not cursor:
-            return False
         # ______________________________________________________________________
         # make worksheet
         worksheet = workbook.add_worksheet(page)
-        column_names = [{'name': desc[0], 'length': len(desc[0])} for desc in cursor.description]
-        # print(column_names)  # TEST
-        for i, x in enumerate(column_names):
-            worksheet.write(0, i, x['name'], cell_format_header)
-        for i, row in enumerate(cursor.fetchall()):
-            row_num = i + 1
-            for coll_num, value in enumerate(row):
-                # print(row_num, coll_num, value) #### TEST
-                # print(type(value), value) #### TEST
-                # special cell formats
-                if isinstance(value, datetime.datetime):
-                    # WARNING: check <'datetime.datetime'> before <'datetime.date'>
-                    worksheet.write(row_num, coll_num, value, cell_format_dt)
-                    length = len(_DT_FORMAT)
-                elif isinstance(value, datetime.time):
-                    worksheet.write(row_num, coll_num, value, cell_format_time)
-                    length = len(_TIME_FORMAT)
-                elif isinstance(value, datetime.date):
-                    worksheet.write(row_num, coll_num, value, cell_format_date)
-                    length = len(_DATE_FORMAT)
-                else:
-                    worksheet.write(row_num, coll_num, value)
-                    length = len(str(value))
-                # NOTE: calculate the maximum length of a row in a column
-                if length > column_names[coll_num]['length']:
-                    column_names[coll_num]['length'] = length
+        row_num = 0
+        # ______________________________________________________________________
+        # execute queries, supported multiple queries
+        for query in config_page['query'].split(";\n"):
+            cursor = pg_query(db, query.strip())
+            if not cursor:
+                return False
+            # <class 'psycopg2.extensions.Column'>
+            headers = [{'name': x.name, 'length': len(x.name)} for x in cursor.description]
+            # print(headers)  # TEST
+            for col_num, x in enumerate(headers):
+                # print("HEAD >", row_num, col_num, x['name'])  # TEST
+                if x['name'] != "?column?":
+                    worksheet.write(row_num, col_num, x['name'], cell_format_header)
+            row_num += 1
+            for column in cursor.fetchall():
+                for col_num, value in enumerate(column):
+                    # print("DATA >", row_num, col_num, value)  # TEST
+                    # print(type(value), value) #### TEST
+                    # special cell formats
+                    if isinstance(value, datetime.datetime):
+                        # WARNING: check <'datetime.datetime'> before <'datetime.date'>
+                        worksheet.write(row_num, col_num, value, cell_format_dt)
+                        length = len(_DT_FORMAT)
+                    elif isinstance(value, datetime.time):
+                        worksheet.write(row_num, col_num, value, cell_format_time)
+                        length = len(_TIME_FORMAT)
+                    elif isinstance(value, datetime.date):
+                        worksheet.write(row_num, col_num, value, cell_format_date)
+                        length = len(_DATE_FORMAT)
+                    else:
+                        worksheet.write(row_num, col_num, value)
+                        length = len(str(value))
+                    # NOTE: calculate the maximum length of a row in a column
+                    if length > headers[col_num]['length']:
+                        headers[col_num]['length'] = length
+                #
+                row_num += 1
         # ______________________________________________________________________
         # set the width of the column
-        for i, x in enumerate(column_names):
+        for i, x in enumerate(headers):
             # NOTE: limit the maximum width
             if x['length'] < 100:
                 length = x['length'] + 1
