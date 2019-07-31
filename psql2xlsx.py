@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 30.07.2019
+# 31.07.2019
 # ----------------------------------------------------------------------------------------------------------------------
 import argparse
 import configparser
@@ -158,19 +158,23 @@ def main():
         # make worksheet
         worksheet = workbook.add_worksheet(page)
         row_num = 0
+        column_width = {}
         # ______________________________________________________________________
         # execute queries, supported multiple queries
         for query in config_page['query'].split(";\n"):
             cursor = pg_query(db, query.strip())
             if not cursor:
                 return False
-            # <class 'psycopg2.extensions.Column'>
-            headers = [{'name': x.name, 'length': len(x.name)} for x in cursor.description]
-            # print(headers)  # TEST
-            for col_num, x in enumerate(headers):
-                # print("HEAD >", row_num, col_num, x['name'])  # TEST
-                if x['name'] != "?column?":
-                    worksheet.write(row_num, col_num, x['name'], cell_format_header)
+            for col_num, column in enumerate(cursor.description):
+                # print(column)  # <class 'psycopg2.extensions.Column'>
+                # print("HEAD >", row_num, col_num, column.name)  # TEST
+                if column.name != "?column?":
+                    worksheet.write(row_num, col_num, column.name, cell_format_header)
+                    # NOTE: calculate the maximum length of a row in a column
+                    length = len(column.name)
+                    column_width.setdefault(col_num, 0)
+                    if length > column_width[col_num]:
+                        column_width[col_num] = length
             row_num += 1
             for column in cursor.fetchall():
                 for col_num, value in enumerate(column):
@@ -191,19 +195,23 @@ def main():
                         worksheet.write(row_num, col_num, value)
                         length = len(str(value))
                     # NOTE: calculate the maximum length of a row in a column
-                    if length > headers[col_num]['length']:
-                        headers[col_num]['length'] = length
-                #
+                    column_width.setdefault(col_num, 0)
+                    if length > column_width[col_num]:
+                        column_width[col_num] = length
+                # ______________________________________________________________
                 row_num += 1
         # ______________________________________________________________________
         # set the width of the column
-        for i, x in enumerate(headers):
-            # NOTE: limit the maximum width
-            if x['length'] < 100:
-                length = x['length'] + 1
+        # NOTE: limit the maximum width
+        # print(column_width)  # TEST
+        for x in column_width:
+            length = column_width[x]
+            if length < 80:
+                length += 1
             else:
-                length = 100
-            worksheet.set_column(i, i, length)
+                length = 80
+            # print(x, length)  # TEST
+            worksheet.set_column(x, x, length)
     # __________________________________________________________________________
     # write file
     workbook.close()
