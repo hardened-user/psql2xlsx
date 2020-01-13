@@ -37,7 +37,7 @@ def main():
     # read configuration file
     try:
         config_ini = configparser.ConfigParser()
-        config_ini.read(os.path.abspath(args.config))
+        config_ini.read(os.path.abspath(args.config), encoding='utf-8')
     except Exception as err:
         print("[!!] Exception :: {}\n{}".format(err, "".join(traceback.format_exc())), flush=True)
         return False
@@ -55,6 +55,8 @@ def main():
         'overwrite': False,
         'font_name': 'Liberation Sans',
         'font_size': 10,
+        'bold_headers': 1,
+        'max_column_width': 80,
         'host': "localhost",
         'port': 5432,
         'base': "postgres",
@@ -92,6 +94,9 @@ def main():
     if not config_default['font_size']:
         print("[EE] Invalid option value :: font_size", flush=True)
         return False
+    # inspect: max_column_width
+    if isinstance(config_default['max_column_width'], str):
+        config_default['max_column_width'] = int(config_default['max_column_width'])
     # __________________________________________________________________________
     # check permission
     if not fs_check_access_file(config_default['output'], config_default['overwrite']):
@@ -104,7 +109,7 @@ def main():
     workbook_format_global.set_font_size(config_default['font_size'])
     # special cell formats
     cell_format_header = workbook.add_format(
-        {'bold': True, 'font_name': config_default['font_name'], 'font_size': config_default['font_size']})
+        {'bold': config_default['bold_headers'], 'font_name': config_default['font_name'], 'font_size': config_default['font_size']})
     cell_format_dt = workbook.add_format(
         {'bold': False, 'font_name': config_default['font_name'], 'font_size': config_default['font_size'],
          'num_format': _DT_FORMAT})
@@ -206,10 +211,10 @@ def main():
         # print(column_width)  # TEST
         for x in column_width:
             length = column_width[x]
-            if length < 80:
+            if length < config_default['max_column_width']:
                 length += 1
             else:
-                length = 80
+                length = config_default['max_column_width']
             # print(x, length)  # TEST
             worksheet.set_column(x, x, length)
     # __________________________________________________________________________
